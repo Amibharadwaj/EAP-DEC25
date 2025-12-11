@@ -1,0 +1,49 @@
+name: Import ai-accelerator-C3
+
+on:
+  workflow_dispatch:
+  # optional scheduled run; remove or adjust if you don't want automatic runs
+  schedule:
+    - cron: '0 3 * * 0' # weekly on Sunday 03:00 UTC
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout destination repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Clone upstream source repo
+        run: |
+          git clone --depth 1 https://github.com/eng-accelerator/ai-accelerator-C3.git upstream
+
+      - name: Copy source into ai-accelerator-C3 folder
+        run: |
+          rm -rf ai-accelerator-C3
+          mkdir -p ai-accelerator-C3
+          rsync -a --delete --exclude='.git' upstream/ ai-accelerator-C3/
+          # Add .gitkeep to truly empty directories so Git tracks them
+          find ai-accelerator-C3 -type d -empty -print0 | while IFS= read -r -d '' dir; do
+            printf "%s\n" "# placeholder to track empty directory" > "$dir/.gitkeep"
+          done
+
+      - name: Commit and push to main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add ai-accelerator-C3
+          git commit -m "Import: eng-accelerator/ai-accelerator-C3 (automated import)" || echo "No changes to commit"
+          # Push commit to main (create branch if missing)
+          git push origin HEAD:main
+
+      - name: Create and push c3-import branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Ensure branch exists and matches current state
+          git checkout -B c3-import
+          git push -u origin c3-import --force
